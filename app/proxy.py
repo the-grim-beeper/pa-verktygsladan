@@ -45,7 +45,22 @@ async def proxy_request(tool_slug: str, path: str, request: Request) -> Response
     )
 
     # Stream the response back
-    upstream = await _client.send(req, stream=True)
+    try:
+        upstream = await _client.send(req, stream=True)
+    except httpx.ConnectError:
+        logger.error("Cannot connect to %s for tool '%s'", base_url, tool_slug)
+        return Response(
+            content=f"Tjänsten '{tool_slug}' är inte tillgänglig just nu.",
+            status_code=502,
+            media_type="text/plain; charset=utf-8",
+        )
+    except httpx.TimeoutException:
+        logger.error("Timeout connecting to %s for tool '%s'", base_url, tool_slug)
+        return Response(
+            content=f"Tjänsten '{tool_slug}' svarar inte (timeout).",
+            status_code=504,
+            media_type="text/plain; charset=utf-8",
+        )
 
     # Check if this is a streaming response (SSE, chunked)
     content_type = upstream.headers.get("content-type", "")
